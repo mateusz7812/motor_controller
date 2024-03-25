@@ -2,6 +2,7 @@
 #include <MagicPot.h>
 #include <Toggle.h>
 #include <U8g2lib.h>
+#include <SmartButton.h>
 
 #define DEBUG_BAUDIOS 9600
 #define POTENTIOMETER_PIN A0
@@ -30,19 +31,19 @@ static float speed = 5;
 static float direction = 0;
 
 static bool stepperRun = false;
-static bool fastRunForward = false;
-static bool fastRunBackward = false;
+static bool fastRun = false;
 
 static unsigned long lastRefreshTime = 0;
+
+using namespace smartbutton;
 
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIRECTION_PIN);
 MagicPot potentiometer(POTENTIOMETER_PIN, POTENTIOMETER_MIN_READ, POTENTIOMETER_MAX_READ);
 U8X8_SH1106_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE);
 
-Toggle startButton(START_BUTTON_PIN);
-Toggle stopButton(STOP_BUTTON_PIN);
-Toggle directionSwitch(LEFT_SWITCH_PIN, RIGHT_SWITCH_PIN);
 Toggle limitSwitch(LIMIT_SWITCH_PIN);
+SmartButton startButton(START_BUTTON_PIN, SmartButton::InputType::NORMAL_HIGH);
+SmartButton stopButton(STOP_BUTTON_PIN, SmartButton::InputType::NORMAL_HIGH);
 
 void draw() {
   u8x8.setFont(u8x8_font_inr21_2x4_r);
@@ -59,12 +60,9 @@ void draw() {
 }
 
 void updateStepper(){
-  if (fastRunForward){
-      stepper.setSpeed(SPEED_CONST * FAST_SPEED * direction);
-      stepper.runSpeed();
-  } else if (fastRunBackward) {
-      stepper.setSpeed(SPEED_CONST * FAST_SPEED * direction * (-1.0));
-      stepper.runSpeed();
+  if (fastRun){
+    stepper.setSpeed(SPEED_CONST * FAST_SPEED * direction);
+    stepper.runSpeed();
   } else if (stepperRun){
     stepper.setSpeed(SPEED_CONST * speed * direction);
     stepper.runSpeed();
@@ -81,41 +79,40 @@ void calcSpeed(){
 }
 
 void updateServices(){
-  startButton.poll();
-  stopButton.poll();
-  directionSwitch.poll();
   limitSwitch.poll();
 	potentiometer.read();
+  SmartButton::service();  
+}
+
+void startButtonCallback(SmartButton *button, SmartButton::Event event, int clickCounter)
+{
+  if (event == SmartButton::Event::CLICK) {  
+    stepperRun = !stepperRun;
+    direction = 1;
+  } else if (event == SmartButton::Event::RELEASED) {   
+    fastRun = false;
+  } else if (event == SmartButton::Event::HOLD) {   
+    direction = 1;
+    fastRun = true; 
+  }
+}
+
+void stopButtonCallback(SmartButton *button, SmartButton::Event event, int clickCounter)
+{
+  if (event == SmartButton::Event::CLICK) {  
+    stepperRun = !stepperRun;
+    direction = -1;
+  } else if (event == SmartButton::Event::RELEASED) {   
+    fastRun = false;
+  } else if (event == SmartButton::Event::HOLD) {   
+    direction = -1;
+    fastRun = true; 
+  }
 }
 
 void readButtons(){
-  if (startButton.pressedFor(1000)){
-    fastRunForward = true; 
-  } else if (startButton.isPressed()){
-    stepperRun = true;
-  } else if (startButton.isReleased()){
-    fastRunForward = false;
-  }
-
-  if (stopButton.pressedFor(1000)){
-    fastRunBackward = true; 
-  } else if (stopButton.isPressed()){
-    stepperRun = false;
-  } else if (stopButton.isReleased()){
-    fastRunBackward = false;
-  }
-  
-  if (directionSwitch.isMID()) {
-    direction = 0;
-  } else if (directionSwitch.isUP()) {
-    direction = 1;
-  } else if (directionSwitch.isDN()) {
-    direction = -1;
-  }
-
   if (limitSwitch.isPressed()){
     stepperRun = false;
-    fastRunForward = false;
   } 
 }
 
@@ -139,11 +136,13 @@ void setup()
   stepper.setEnablePin(ENABLE_PIN);
   stepper.enableOutputs();
   stepper.setMaxSpeed(60000);
-  
-  startButton.begin(START_BUTTON_PIN);
-  stopButton.begin(STOP_BUTTON_PIN);
-  directionSwitch.begin(LEFT_SWITCH_PIN, RIGHT_SWITCH_PIN);
+
+  pinMode(START_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(STOP_BUTTON_PIN, INPUT_PULLUP);
   limitSwitch.begin(LIMIT_SWITCH_PIN);
+
+  startButton.begin(startButtonCallback);
+  stopButton.begin(stopButtonCallback);
 }
 
 void loop()
