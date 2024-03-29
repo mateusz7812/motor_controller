@@ -10,16 +10,26 @@
 #define POTENTIOMETER_MAX_READ 1000.0
 
 #define MIN_SPEED 0.5
-#define MAX_SPEED 11
+//#define MAX_SPEED 11
+#define MAX_SPEED 200
 #define SPEED_CONST 14
 #define FAST_SPEED 100
 
-#define START_BUTTON_PIN 12
-#define STOP_BUTTON_PIN 11
-#define LEFT_SWITCH_PIN 10
-#define RIGHT_SWITCH_PIN 9
-#define LIMIT_SWITCH_PIN 8
+#define GROUND_1_PIN 13
+#define GROUND_2_PIN 12
+#define GROUND_3_PIN 11
+#define GROUND_4_PIN 10
+#define GROUND_5_PIN 9
+#define GROUND_6_PIN 8
+#define GROUND_7_PIN A1
+#define GROUND_8_PIN A2
+#define GROUND_9_PIN A3
+#define GROUND_10_PIN A6
+#define GROUND_11_PIN A7
 
+#define START_BUTTON_PIN 7
+#define STOP_BUTTON_PIN 6
+#define LIMIT_SWITCH_PIN 5
 #define STEP_PIN 3
 #define DIRECTION_PIN 2
 #define ENABLE_PIN 4
@@ -129,6 +139,30 @@ void setup()
 {
 	Serial.begin(DEBUG_BAUDIOS);
 
+  pinMode(GROUND_1_PIN, OUTPUT);
+  pinMode(GROUND_2_PIN, OUTPUT);
+  pinMode(GROUND_3_PIN, OUTPUT);
+  pinMode(GROUND_4_PIN, OUTPUT);
+  pinMode(GROUND_5_PIN, OUTPUT);
+  pinMode(GROUND_6_PIN, OUTPUT);
+  pinMode(GROUND_7_PIN, OUTPUT);
+  pinMode(GROUND_8_PIN, OUTPUT);
+  pinMode(GROUND_9_PIN, OUTPUT);
+  pinMode(GROUND_10_PIN, OUTPUT);
+  pinMode(GROUND_11_PIN, OUTPUT);
+  
+  digitalWrite(GROUND_1_PIN, LOW);
+  digitalWrite(GROUND_2_PIN, LOW);
+  digitalWrite(GROUND_3_PIN, LOW);
+  digitalWrite(GROUND_4_PIN, LOW);
+  digitalWrite(GROUND_5_PIN, LOW);
+  digitalWrite(GROUND_6_PIN, LOW);
+  digitalWrite(GROUND_7_PIN, LOW);
+  digitalWrite(GROUND_8_PIN, LOW);
+  digitalWrite(GROUND_9_PIN, LOW);
+  digitalWrite(GROUND_10_PIN, LOW);
+  digitalWrite(GROUND_11_PIN, LOW);
+  
   u8x8.begin();
 	potentiometer.begin();
 
