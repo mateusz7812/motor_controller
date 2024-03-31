@@ -16,8 +16,8 @@
 #define FAST_SPEED 100
 
 #define GROUND_1_PIN 13
-#define GROUND_2_PIN 12
-#define GROUND_3_PIN 11
+//#define GROUND_2_PIN 12
+//#define GROUND_3_PIN 11
 #define GROUND_4_PIN 10
 #define GROUND_5_PIN 9
 #define GROUND_6_PIN 8
@@ -27,6 +27,9 @@
 #define GROUND_10_PIN A6
 #define GROUND_11_PIN A7
 
+#define VOUT_1_PIN 12
+#define VOUT_2_PIN 11
+
 #define START_BUTTON_PIN 7
 #define STOP_BUTTON_PIN 6
 #define LIMIT_SWITCH_PIN 5
@@ -34,7 +37,8 @@
 #define DIRECTION_PIN 2
 #define ENABLE_PIN 4
 
-#define REFRESH_INTERVAL 100
+#define OUTPUT_REFRESH_INTERVAL 100
+#define SPEED_REFRESH_INTERVAL 100
 
 static float lastSpeed = 5;
 static float speed = 5;
@@ -43,7 +47,9 @@ static float direction = 0;
 static bool stepperRun = false;
 static bool fastRun = false;
 
-static unsigned long lastRefreshTime = 0;
+static unsigned long lastOutputRefreshTime = 0;
+static unsigned long lastSpeedRefreshTime = 0;
+static unsigned long lastLoopRefreshTime = 0;
 
 using namespace smartbutton;
 
@@ -69,28 +75,33 @@ void draw() {
   u8x8.drawString(12, 12, "mm");	
 }
 
-void updateStepper(){
-  if (fastRun){
-    stepper.setSpeed(SPEED_CONST * FAST_SPEED * direction);
-    stepper.runSpeed();
-  } else if (stepperRun){
+void calcSpeed(){
+  if(millis() - lastSpeedRefreshTime >= SPEED_REFRESH_INTERVAL)
+	{
+    if (fastRun){
+      speed = FAST_SPEED;
+    } else if (stepperRun){
+      potentiometer.read();
+      speed = (((MAX_SPEED - MIN_SPEED) * potentiometer.getValue()) / POTENTIOMETER_MAX_READ) + MIN_SPEED;
+      //speed = (speed + 4 * lastSpeed) / 5;
+      speed = (speed + lastSpeed) / 2;
+      speed = speed - fmod(speed, 0.05);
+      lastSpeed = speed;
+    } else {
+      speed = 0;
+    }
     stepper.setSpeed(SPEED_CONST * speed * direction);
+		lastSpeedRefreshTime += SPEED_REFRESH_INTERVAL;
+	}
+}
+
+void updateServices(){
+  if (speed > 0){
     stepper.runSpeed();
   } else {
     stepper.stop();
   }
-}
-
-void calcSpeed(){
-  speed = (((MAX_SPEED - MIN_SPEED) * potentiometer.getValue()) / POTENTIOMETER_MAX_READ) + MIN_SPEED;
-  speed = (speed + 4 * lastSpeed) / 5;
-  speed = speed - fmod(speed, 0.05);
-  lastSpeed = speed;
-}
-
-void updateServices(){
   limitSwitch.poll();
-	potentiometer.read();
   SmartButton::service();  
 }
 
@@ -127,10 +138,10 @@ void readButtons(){
 }
 
 void sendOutput(){
-  if(millis() - lastRefreshTime >= REFRESH_INTERVAL)
+  if(millis() - lastOutputRefreshTime >= OUTPUT_REFRESH_INTERVAL)
 	{
     draw();
-		lastRefreshTime += REFRESH_INTERVAL;
+		lastOutputRefreshTime += OUTPUT_REFRESH_INTERVAL;
 	  //Serial.println(String("S: ") + speed + String(", D: ") + direction + String(", FRF: ") + fastRunForward + String(", FRB: ") + fastRunBackward + String(", SR: ") + stepperRun + String(", SP: ") + stepper.currentPosition() + String(", SS: ") + stepper.speed() + String(", MS: ") + stepper.maxSpeed());
 	}
 }
@@ -140,8 +151,8 @@ void setup()
 	Serial.begin(DEBUG_BAUDIOS);
 
   pinMode(GROUND_1_PIN, OUTPUT);
-  pinMode(GROUND_2_PIN, OUTPUT);
-  pinMode(GROUND_3_PIN, OUTPUT);
+ // pinMode(GROUND_2_PIN, OUTPUT);
+ // pinMode(GROUND_3_PIN, OUTPUT);
   pinMode(GROUND_4_PIN, OUTPUT);
   pinMode(GROUND_5_PIN, OUTPUT);
   pinMode(GROUND_6_PIN, OUTPUT);
@@ -150,10 +161,13 @@ void setup()
   pinMode(GROUND_9_PIN, OUTPUT);
   pinMode(GROUND_10_PIN, OUTPUT);
   pinMode(GROUND_11_PIN, OUTPUT);
+
+  pinMode(VOUT_1_PIN, OUTPUT);
+  pinMode(VOUT_2_PIN, OUTPUT);
   
   digitalWrite(GROUND_1_PIN, LOW);
-  digitalWrite(GROUND_2_PIN, LOW);
-  digitalWrite(GROUND_3_PIN, LOW);
+ // digitalWrite(GROUND_2_PIN, LOW);
+  //digitalWrite(GROUND_3_PIN, LOW);
   digitalWrite(GROUND_4_PIN, LOW);
   digitalWrite(GROUND_5_PIN, LOW);
   digitalWrite(GROUND_6_PIN, LOW);
@@ -162,6 +176,9 @@ void setup()
   digitalWrite(GROUND_9_PIN, LOW);
   digitalWrite(GROUND_10_PIN, LOW);
   digitalWrite(GROUND_11_PIN, LOW);
+
+  digitalWrite(VOUT_1_PIN, HIGH);
+  digitalWrite(VOUT_2_PIN, HIGH);
   
   u8x8.begin();
 	potentiometer.begin();
@@ -184,6 +201,5 @@ void loop()
   updateServices();
   readButtons();
   calcSpeed();
-  updateStepper();
   sendOutput();
 }
