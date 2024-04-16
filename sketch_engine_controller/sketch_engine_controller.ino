@@ -1,19 +1,18 @@
 #include <AccelStepper.h>
 #include <MagicPot.h>
 #include <Toggle.h>
-#include <U8g2lib.h>
 #include <SmartButton.h>
 
-#define DEBUG_BAUDIOS 9600
+#define SERIAL_BAUDIOS 9600
 #define POTENTIOMETER_PIN A0
 #define POTENTIOMETER_MIN_READ 0.0
 #define POTENTIOMETER_MAX_READ 1000.0
 
-#define MIN_SPEED 0.5
+#define MIN_SPEED -0.03
 //#define MAX_SPEED 11
-#define MAX_SPEED 200
-#define SPEED_CONST 14
-#define FAST_SPEED 100
+#define MAX_SPEED 3
+#define SPEED_CONST 14 * 8 * 1.5
+#define FAST_SPEED 40
 
 #define GROUND_1_PIN 13
 //#define GROUND_2_PIN 12
@@ -40,9 +39,9 @@
 #define OUTPUT_REFRESH_INTERVAL 100
 #define SPEED_REFRESH_INTERVAL 100
 
-static float lastSpeed = 5;
-static float speed = 5;
-static float direction = 0;
+float lastSpeed = 5;
+float speed = 5;
+static float direction = 1;
 
 static bool stepperRun = false;
 static bool fastRun = false;
@@ -55,52 +54,45 @@ using namespace smartbutton;
 
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIRECTION_PIN);
 MagicPot potentiometer(POTENTIOMETER_PIN, POTENTIOMETER_MIN_READ, POTENTIOMETER_MAX_READ);
-U8X8_SH1106_128X64_NONAME_HW_I2C u8x8(U8X8_PIN_NONE);
 
 Toggle limitSwitch(LIMIT_SWITCH_PIN);
 SmartButton startButton(START_BUTTON_PIN, SmartButton::InputType::NORMAL_HIGH);
 SmartButton stopButton(STOP_BUTTON_PIN, SmartButton::InputType::NORMAL_HIGH);
 
-void draw() {
-  u8x8.setFont(u8x8_font_inr21_2x4_r);
-
-  char resultS[8];
-  dtostrf(speed, 5, 2, resultS);
-  u8x8.drawString(0, 0, resultS);	
-  u8x8.drawString(10, 0, "obr");	
-
-  char resultP[8];
-  dtostrf(speed * 0.3, 5, 2, resultP);
-  u8x8.drawString(0, 12, resultP);	
-  u8x8.drawString(12, 12, "mm");	
-}
 
 void calcSpeed(){
   if(millis() - lastSpeedRefreshTime >= SPEED_REFRESH_INTERVAL)
 	{
-    if (fastRun){
+    potentiometer.read();
+    speed = (((MAX_SPEED - MIN_SPEED) * potentiometer.getValue()) / POTENTIOMETER_MAX_READ) + MIN_SPEED;
+    //speed = (speed + 4 * lastSpeed) / 5;
+    if(speed < 0.01){
+      speed = 0.01;
+    } else if (speed > 2.8) {
       speed = FAST_SPEED;
-    } else if (stepperRun){
-      potentiometer.read();
-      speed = (((MAX_SPEED - MIN_SPEED) * potentiometer.getValue()) / POTENTIOMETER_MAX_READ) + MIN_SPEED;
-      //speed = (speed + 4 * lastSpeed) / 5;
-      speed = (speed + lastSpeed) / 2;
-      speed = speed - fmod(speed, 0.05);
-      lastSpeed = speed;
-    } else {
-      speed = 0;
     }
-    stepper.setSpeed(SPEED_CONST * speed * direction);
+    //speed = (speed + lastSpeed) / 2;
+    //speed = speed - fmod(speed, 0.01);
+    //lastSpeed = speed;
+      
+    if (fastRun){
+      stepper.setSpeed(SPEED_CONST * direction * FAST_SPEED);
+    } else if (stepperRun){
+      stepper.setSpeed(SPEED_CONST * direction * speed);
+    }
+    //speed=14*70*32;
+    //stepper.setSpeed( * speed * direction);
 		lastSpeedRefreshTime += SPEED_REFRESH_INTERVAL;
 	}
 }
 
 void updateServices(){
-  if (speed > 0){
+  if (fastRun || stepperRun){
     stepper.runSpeed();
   } else {
     stepper.stop();
   }
+  
   limitSwitch.poll();
   SmartButton::service();  
 }
@@ -140,15 +132,18 @@ void readButtons(){
 void sendOutput(){
   if(millis() - lastOutputRefreshTime >= OUTPUT_REFRESH_INTERVAL)
 	{
-    draw();
+        char resultS[32];
+        dtostrf(speed, 10, 2, resultS);
+        Serial.write(resultS, 32);
+
 		lastOutputRefreshTime += OUTPUT_REFRESH_INTERVAL;
-	  //Serial.println(String("S: ") + speed + String(", D: ") + direction + String(", FRF: ") + fastRunForward + String(", FRB: ") + fastRunBackward + String(", SR: ") + stepperRun + String(", SP: ") + stepper.currentPosition() + String(", SS: ") + stepper.speed() + String(", MS: ") + stepper.maxSpeed());
+	    //Serial.println(String("S: ") + speed + String(", D: ") + direction + String(", FRF: ") + fastRunForward + String(", FRB: ") + fastRunBackward + String(", SR: ") + stepperRun + String(", SP: ") + stepper.currentPosition() + String(", SS: ") + stepper.speed() + String(", MS: ") + stepper.maxSpeed());
 	}
 }
 
 void setup()
 {
-	Serial.begin(DEBUG_BAUDIOS);
+    Serial.begin(SERIAL_BAUDIOS);
 
   pinMode(GROUND_1_PIN, OUTPUT);
  // pinMode(GROUND_2_PIN, OUTPUT);
@@ -180,13 +175,12 @@ void setup()
   digitalWrite(VOUT_1_PIN, HIGH);
   digitalWrite(VOUT_2_PIN, HIGH);
   
-  u8x8.begin();
 	potentiometer.begin();
 
   stepper.setPinsInverted(false, false, true);
   stepper.setEnablePin(ENABLE_PIN);
   stepper.enableOutputs();
-  stepper.setMaxSpeed(60000);
+  stepper.setMaxSpeed(600000);
 
   pinMode(START_BUTTON_PIN, INPUT_PULLUP);
   pinMode(STOP_BUTTON_PIN, INPUT_PULLUP);
@@ -198,8 +192,8 @@ void setup()
 
 void loop()
 {
-  updateServices();
   readButtons();
   calcSpeed();
+  updateServices();
   sendOutput();
 }
